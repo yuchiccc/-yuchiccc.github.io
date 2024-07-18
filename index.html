@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>貪吃蛇遊戲</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: "Microsoft JhengHei", Arial, sans-serif;
+        }
+        #gameContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #gameCanvas {
+            border: 3px solid #6a4502;
+            background-color: #988974;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+        #scoreBoard {
+            display: flex;
+            justify-content: space-between;
+            width: 400px;
+            margin-bottom: 0px;
+        }
+        #controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .controlBtn {
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            border: none;
+            border-radius: 50%;
+            background-color: #FF0000;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .controlBtn:hover {
+            background-color: #CC0000;
+        }
+        #upBtn { grid-column: 2; }
+        #leftBtn { grid-column: 1; grid-row: 2; }
+        #rightBtn { grid-column: 3; grid-row: 2; }
+        #downBtn { grid-column: 2; grid-row: 3; }
+        #playerNameInput {
+            margin-bottom: 20px;
+            padding: 10px;
+            font-size: 16px;
+        }
+        #effectsInfo {
+            width: 200px;
+            margin-top: 0px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <input type="text" id="playerNameInput" placeholder="請輸入玩家名稱">
+        <div id="scoreBoard">
+            <div>玩家: <span id="playerName"></span></div>
+            <div>當前分數: <span id="currentScore">0</span></div>
+            <div>最高分數: <span id="highScore">0</span></div>
+        </div>
+        <div id="effectsInfo">
+            <p>🥦🍅🥒🥜🥬🌽：加10分</p>
+            <p>☠️☠️☠️☠️☠️ ：遊戲結束</p>
+        </div>
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        <div id="controls">
+            <button id="upBtn" class="controlBtn">↑</button>
+            <button id="leftBtn" class="controlBtn">←</button>
+            <button id="rightBtn" class="controlBtn">→</button>
+            <button id="downBtn" class="controlBtn">↓</button>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const currentScoreElement = document.getElementById('currentScore');
+        const highScoreElement = document.getElementById('highScore');
+        const playerNameElement = document.getElementById('playerName');
+        const playerNameInput = document.getElementById('playerNameInput');
+
+        const gridSize = 20;
+        const tileCount = 20;
+
+        let snake = [{x: 10, y: 10}];
+        let food = {x: 15, y: 15, type: '🥦'};
+        let pesticide = {x: -1, y: -1};
+        let dx = 0;
+        let dy = 0;
+        let score = 0;
+        let highScore = localStorage.getItem('highScore') || 0;
+        let playerName = '';
+        let speed = 200;
+
+        const foodTypes = ['🥦','🍅','🥒','🥜','🥬','🌽'];
+
+        highScoreElement.textContent = highScore;
+
+        playerNameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                startGame();
+            }
+        });
+
+        function startGame() {
+            playerName = playerNameInput.value;
+            if (playerName.trim() === '') {
+                alert('請輸入玩家名稱！');
+                return;
+            }
+            playerNameElement.textContent = playerName;
+            playerNameInput.style.display = 'none';
+            generateFood();
+            drawGame();
+        }
+
+        function drawGame() {
+            clearCanvas();
+            moveSnake();
+            drawSnake();
+            drawFood();
+            drawPesticide();
+            updateScore();
+            checkCollision();
+            setTimeout(drawGame, speed);
+        }
+
+        function clearCanvas() {
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            gradient.addColorStop(0, '#988974');
+            gradient.addColorStop(1, '#988974');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.lineWidth = 1;
+
+            for (let i = 0; i <= tileCount; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * gridSize, 0);
+                ctx.lineTo(i * gridSize, canvas.height);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(0, i * gridSize);
+                ctx.lineTo(canvas.width, i * gridSize);
+                ctx.stroke();
+            }
+        }
+
+        function moveSnake() {
+            const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+            snake.unshift(head);
+            if (head.x === food.x && head.y === food.y) {
+                applyFoodEffect();
+                generateFood();
+            } else {
+                snake.pop();
+            }
+        }
+
+        function drawSnake() {
+            snake.forEach((segment, index) => {
+                ctx.fillStyle = index === 0 ? '#4caf50' : '#81c784';
+                ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+                
+                if (index === 0) {
+                    // 畫更精緻的蛇頭
+                    ctx.fillStyle = '#388e3c';
+                    ctx.beginPath();
+                    ctx.arc(segment.x * gridSize + gridSize / 2, segment.y * gridSize + gridSize / 2, gridSize / 2 - 1, 0, 2 * Math.PI);
+                    ctx.fill();
+
+                    // 畫眼睛
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    ctx.arc(segment.x * gridSize + 6, segment.y * gridSize + 6, 4, 0, 2 * Math.PI);
+                    ctx.arc(segment.x * gridSize + 14, segment.y * gridSize + 6, 4, 0, 2 * Math.PI);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = 'black';
+                    ctx.beginPath();
+                    ctx.arc(segment.x * gridSize + 6, segment.y * gridSize + 6, 2, 0, 2 * Math.PI);
+                    ctx.arc(segment.x * gridSize + 14, segment.y * gridSize + 6, 2, 0, 2 * Math.PI);
+                    ctx.fill();
+                    
+                    // 畫更精緻的舌頭
+                    ctx.strokeStyle = '#ff1744';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    
+                    let tongueStartX = segment.x * gridSize + gridSize / 2;
+                    let tongueStartY = segment.y * gridSize + gridSize / 2;
+                    let tongueLength = gridSize / 2 + 5;
+                    
+                    if (dx === 1) { // 向右
+                        ctx.moveTo(tongueStartX, tongueStartY);
+                        ctx.lineTo(tongueStartX + tongueLength, tongueStartY - 3);
+                        ctx.moveTo(tongueStartX, tongueStartY);
+                        ctx.lineTo(tongueStartX + tongueLength, tongueStartY + 3);
+                        ctx.lineTo(tongueStartX + tongueLength + 5, tongueStartY);
+                    } else if (dx === -1) { // 向左
+                        ctx.moveTo(tongueStartX, tongueStartY);
+                        ctx.lineTo(tongueStartX - tongueLength, tongueStartY - 3);
+                        ctx.moveTo(tongueStartX, tongueStartY);
+                        ctx.lineTo(tongueStartX - tongueLength, tongueStartY + 3);
+                        ctx.lineTo(tongueStartX - tongueLength - 5, tongueStartY);
+                    } else if (dy === -1) { // 向上
+                        ctx.moveTo(tongueStartX, tongueStartY);
+                        ctx.lineTo(tongueStartX - 3, tongueStartY - tongueLength);
+                        ctx.moveTo(tongueStartX, tongueStartY);
+                        ctx.lineTo(tongueStartX + 3, tongueStartY - tongueLength);
+                        ctx.lineTo(tongueStartX, tongueStartY - tongueLength - 5);
+                    } else if (dy === 1) { // 向下
+                        ctx.moveTo(tongueStartX, tongueStartY);
+                        ctx.lineTo(tongueStartX - 3, tongueStartY + tongueLength);
+                        ctx.moveTo(tongueStartX, tongueStartY);
+                        ctx.lineTo(tongueStartX + 3, tongueStartY + tongueLength);
+                        ctx.lineTo(tongueStartX, tongueStartY + tongueLength + 5);
+                    }
+                    
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function drawFood() {
+            ctx.font = `${gridSize}px Arial`;
+            ctx.fillText(food.type, food.x * gridSize, (food.y + 1) * gridSize);
+        }
+
+        function drawPesticide() {
+            if (pesticide.x !== -1 && pesticide.y !== -1) {
+                ctx.font = `${gridSize}px Arial`;
+                ctx.fillText('☠️', pesticide.x * gridSize, (pesticide.y + 1) * gridSize);
+            }
+        }
+
+        function updateScore() {
+            currentScoreElement.textContent = score;
+            if (score > highScore) {
+                highScore = score;
+                highScoreElement.textContent = highScore;
+                localStorage.setItem('highScore', highScore);
+            }
+        }
+
+        function generateFood() {
+            food.x = Math.floor(Math.random() * tileCount);
+            food.y = Math.floor(Math.random() * tileCount);
+            food.type = foodTypes[Math.floor(Math.random() * foodTypes.length)];
+        }
+
+        function generatePesticide() {
+            pesticide.x = Math.floor(Math.random() * tileCount);
+            pesticide.y = Math.floor(Math.random() * tileCount);
+        }
+
+        function applyFoodEffect() {
+            if (food.type === '🍅') {
+                score += 10;
+            } else {
+                score += 10;
+            }
+            if (score > 0 && score % 50 === 0) {
+                generatePesticide();
+            }
+        }
+
+        function checkCollision() {
+            if (snake[0].x < 0 || snake[0].x >= tileCount || snake[0].y < 0 || snake[0].y >= tileCount) {
+                resetGame();
+            }
+            for (let i = 1; i < snake.length; i++) {
+                if (snake[i].x === snake[0].x && snake[i].y === snake[0].y) {
+                    resetGame();
+                }
+            }
+            if (snake[0].x === pesticide.x && snake[0].y === pesticide.y) {
+                resetGame();
+            }
+        }
+
+        function resetGame() {
+            alert(`遊戲結束！${playerName}，你的得分是: ${score}`);
+            snake = [{x: 10, y: 10}];
+            generateFood();
+            pesticide = {x: -1, y: -1};
+            dx = 0;
+            dy = 0;
+            score = 0;
+            updateScore();
+        }
+
+        function changeDirection(newDx, newDy) {
+            if ((newDx === 1 && dx === -1) || (newDx === -1 && dx === 1) ||
+                (newDy === 1 && dy === -1) || (newDy === -1 && dy === 1)) {
+                return;
+            }
+            dx = newDx;
+            dy = newDy;
+        }
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowUp': changeDirection(0, -1); break;
+                case 'ArrowDown': changeDirection(0, 1); break;
+                case 'ArrowLeft': changeDirection(-1, 0); break;
+                case 'ArrowRight': changeDirection(1, 0); break;
+            }
+        });
+
+        document.getElementById('upBtn').addEventListener('click', () => changeDirection(0, -1));
+        document.getElementById('downBtn').addEventListener('click', () => changeDirection(0, 1));
+        document.getElementById('leftBtn').addEventListener('click', () => changeDirection(-1, 0));
+        document.getElementById('rightBtn').addEventListener('click', () => changeDirection(1, 0));
+    </script>
+</body>
+</html>
